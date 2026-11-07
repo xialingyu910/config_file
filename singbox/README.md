@@ -26,8 +26,8 @@
 | --- | --- |
 | Momo 运行方式 | 仅内核 |
 | TUN | `momo-tun`，system 栈，自动路由和自动重定向开启 |
-| TUN 地址 | `172.19.0.1/30`、`fdfe:dcba:9876::1/126` |
-| DNS 入站 | `dns-in`，TCP/UDP 1053 |
+| TUN 地址 | `172.19.0.1/30`，仅 IPv4 |
+| DNS 入站 | `dns-in`，`0.0.0.0:1053`，TCP/UDP |
 | HTTP/SOCKS 混合代理 | 7890 |
 | Clash API / Zashboard | 9095，面板路径 `/ui/` |
 | 面板文件 | `/etc/sing-box/ui` |
@@ -42,7 +42,7 @@ Momo 仅内核模式跳过它的混入及透明接管脚本，DNS、TUN、端口
 - 33 个业务、区域、手动和故障转移策略组，保留候选项顺序。Apple、Spotify、Microsoft 默认直连。
 - 应用净化、广告拦截优先于一般业务分类和国内域名/IP 直连；私网及明确的直连例外优先。
 - Direct/Global 模式覆盖一般业务规则；未匹配流量交给 `Proxy`。
-- 不统一拒绝 STUN、QUIC；保留 853 端口拒绝规则。ICMP 按配置直连，面板中的 `目标IP:0` 可表示 ICMP，不能据此判断为 DNS 连接。
+- UDP STUN 先由独立嗅探规则识别，再优先交给 `默认代理`，顺序高于私网、国内直连及 Direct/Global 模式规则，用于减少 WebRTC 经直连出口收集公网地址。所选节点需要支持 UDP。QUIC 继续按业务规则分流，保留 853 端口拒绝规则。ICMP 按配置直连，面板中的 `目标IP:0` 可表示 ICMP。
 - 38 个有引用的规则集标签，重复分类已统一；不包含 `proxylite`。
 - 故障转移使用 Fork 的 urltest/fallback，间隔 180 秒、最大可接受延迟 2 秒。
 
@@ -52,11 +52,14 @@ Momo 仅内核模式跳过它的混入及透明接管脚本，DNS、TUN、端口
 - Rule 模式下，APNs、国服游戏、固定直连的 AppStore/Apple Music/Apple TV 使用阿里 DNS 返回真实 IP。
 - Google DoH 经代理，节点域名使用阿里 DNS 解析。
 - 保留 IPv4 策略、8192 条缓存、乐观缓存、evaluate 和响应判断。
+- AAAA 查询优先返回 `NOERROR` 空结果，域名解析器显式使用 `ipv4_only`，路由优先拒绝显式 IPv6 目标。
 - Fake-IP 地址段为 `198.19.0.0/16`，启用 `store_fakeip` 持久化映射，避免核心重启后客户端仍持有旧地址而核心丢失对应域名。
 - 单次 DNS 查询默认超时 5 秒；单条规则可覆盖此值。
 - `223.5.5.5/32`、`223.6.6.6/32` 从 TUN 接管中排除，供直连 DNS 和独立上游连通性检测使用。
 
 AppStore 使用 2026-10-29 的内嵌两域名快照（`apps.apple.com`、`itunes.apple.com`），不自动更新；其他远程规则集按配置更新。
+
+2026-11-07，设备按 IPv4-only 使用。WAN6 已停用并关闭自动启动，LAN 的 RA、DHCPv6、NDP 及 IPv6 前缀分配已关闭，dnsmasq 过滤 AAAA。设备接口关闭 IPv6，系统保留本机回环 `::1`。这些系统设置独立于 JSON，迁移设备时需另行配置。客户端应重连网络并清理 DNS 缓存，以更新此前取得的 IPv6 地址和解析结果。
 
 ## 长期运行与故障恢复
 
